@@ -60,7 +60,8 @@
 我（人类）让 Agent 按上面那段提示词做出来的**参考实现**，可以当答案对照，也可以直接用来编译。
 
 ```bash
-git clone <this-repo> && cd BatterySentry
+git clone https://github.com/RayMorTwinkle/BatterySentry.git
+cd BatterySentry
 bash build.sh                 # 编译 + 组装 dist/BatterySentry.app（ad-hoc 签名）
 open dist/BatterySentry.app   # 运行
 bash install.sh               # 或者：装到 /Applications（登录项更可靠）
