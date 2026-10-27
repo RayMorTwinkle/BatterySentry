@@ -1,10 +1,21 @@
 # 电量哨兵 · BatterySentry
 
+[![Release](https://img.shields.io/github/v/release/RayMorTwinkle/BatterySentry)](https://github.com/RayMorTwinkle/BatterySentry/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/macOS-13%2B-black)](https://github.com/RayMorTwinkle/BatterySentry/releases/latest)
+
 > 常驻 macOS 菜单栏的低电量提醒小工具。**但这份 README 的重点不是它本身** —— 而是让你复制一句话，丢给自己的 AI Agent，让它给你从头做一个一模一样的东西。
 
 ![设置面板](docs/panel.png)
 
 菜单栏上只有一个手绘的电池图标（不显示百分比）：按电量填充、充电时闪电、低于阈值变红。
+
+**不想看代码，只想用**：去 [Releases](https://github.com/RayMorTwinkle/BatterySentry/releases/latest) 下载 `BatterySentry-v1.0.0-macos-arm64.zip`，解压拖进「应用程序」，然后：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/BatterySentry.app   # 未公证，需去掉隔离属性
+open /Applications/BatterySentry.app
+```
 
 ---
 
