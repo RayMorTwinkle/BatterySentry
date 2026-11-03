@@ -10,7 +10,7 @@
 
 菜单栏上只有一个手绘的电池图标（不显示百分比）：按电量填充、充电时闪电、低于阈值变红。
 
-**不想看代码，只想用**：去 [Releases](https://github.com/RayMorTwinkle/BatterySentry/releases/latest) 下载 `BatterySentry-v1.0.0-macos-arm64.zip`，解压拖进「应用程序」，然后：
+**不想看代码，只想用**：去 [Releases](https://github.com/RayMorTwinkle/BatterySentry/releases/latest) 下载最新的 `BatterySentry-v*-macos-arm64.zip`，解压拖进「应用程序」，然后：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/BatterySentry.app   # 未公证，需去掉隔离属性
