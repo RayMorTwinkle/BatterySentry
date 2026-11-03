@@ -48,7 +48,15 @@ final class AppCoordinator: ObservableObject {
                 guard let self, enabled else { return }
                 self.alerts.reset()
                 self.evaluateNow()
+                self.showFocusGuidanceIfNeeded(force: true)
             }
+            .store(in: &cancellables)
+
+        settings.$severeLevel.dropFirst().removeDuplicates()
+            .sink { [weak self] _ in self?.evaluateNow() }
+            .store(in: &cancellables)
+        settings.$repeatMinutes.dropFirst().removeDuplicates()
+            .sink { [weak self] _ in self?.evaluateNow() }
             .store(in: &cancellables)
 
         monitor.start()
@@ -111,6 +119,29 @@ final class AppCoordinator: ObservableObject {
     func snoozeReminder() {
         alerts.snooze()
         reminderStatus = "已暂停至 \(alerts.snoozedUntil?.formatted(date: .omitted, time: .standard) ?? "")"
+    }
+
+    func showFocusGuidanceIfNeeded(force: Bool = false) {
+        let key = "hasShownFocusGuidance"
+        guard settings.enabled, force || !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+
+        let alert = NSAlert()
+        alert.messageText = "检查专注模式的通知设置"
+        alert.informativeText = "游戏、勿扰等专注模式可能延后系统通知。若想保留专注模式，请在每个模式中允许「电量哨兵」通知；也可以关闭这些模式。使用时间敏感通知时，还需在通知设置中允许它。全屏强提醒浮窗仍会独立显示。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "打开专注模式设置")
+        alert.addButton(withTitle: "稍后")
+        if alert.runModal() == .alertFirstButtonReturn {
+            openFocusSettings()
+        }
+    }
+
+    func openFocusSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.Focus-Settings.extension")!
+        if !NSWorkspace.shared.open(url) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+        }
     }
 
     func quit() {

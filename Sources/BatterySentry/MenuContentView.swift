@@ -92,7 +92,15 @@ struct MenuContentView: View {
                     .frame(width: 38, alignment: .trailing)
             }
 
-            Text("电量 ≤ \(settings.threshold)% 时提醒；≤ 10% 时每 5 分钟重复，直到确认、暂停或接电。")
+            Stepper("严重低电量：≤ \(settings.severeLevel)%", value: $settings.severeLevel,
+                    in: 5...min(30, settings.threshold))
+                .font(.caption)
+                .disabled(!settings.enabled)
+            Stepper("重复间隔：\(settings.repeatMinutes) 分钟", value: $settings.repeatMinutes,
+                    in: AppSettings.repeatMinutesRange)
+                .font(.caption)
+                .disabled(!settings.enabled)
+            Text("电量 ≤ \(settings.threshold)% 时提醒；≤ \(settings.severeLevel)% 时每 \(settings.repeatMinutes) 分钟重复，直到确认、暂停或接电。")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -135,6 +143,9 @@ struct MenuContentView: View {
                         .font(.caption2).foregroundStyle(.orange)
                 }
             }
+            Button("检查游戏／勿扰专注模式") { app.openFocusSettings() }
+                .buttonStyle(.link)
+                .font(.caption2)
 
             if settings.notify, alerter.authorizationStatus == .denied {
                 HStack(spacing: 4) {
@@ -214,7 +225,7 @@ struct MenuContentView: View {
 
     private var isLow: Bool {
         guard let level = monitor.level else { return false }
-        return level <= settings.threshold && !monitor.isCharging
+        return level <= settings.threshold && !monitor.isCharging && !monitor.isPluggedIn
     }
 
     private var levelText: String {

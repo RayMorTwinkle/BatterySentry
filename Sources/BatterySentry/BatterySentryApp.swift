@@ -38,6 +38,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         self.statusItemController = StatusItemController(coordinator: coordinator)
 
+        if !CommandLine.arguments.contains("--test-alert") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                coordinator.showFocusGuidanceIfNeeded()
+            }
+        }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
             let forced = CommandLine.arguments.contains("--welcome")
             let shownBefore = UserDefaults.standard.bool(forKey: "hasShownWelcomeWindow")
@@ -56,11 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if CommandLine.arguments.contains("--test-alert") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                coordinator.alerter.fire(
-                    level: max(1, coordinator.settings.threshold - 5),
-                    threshold: coordinator.settings.threshold,
-                    settings: coordinator.settings
-                )
+                coordinator.alerter.fireTest(settings: coordinator.settings)
             }
         }
     }

@@ -1,11 +1,9 @@
 import Foundation
 import os.log
 
-/// 一次放电周期先提醒一次；严重低电量时每五分钟再次提醒，直到用户确认或接电。
+/// 一次放电周期先提醒一次；严重低电量时按用户设定的间隔再次提醒。
 @MainActor
 final class AlertCoordinator {
-    static let severeLevel = 10
-    static let repeatInterval: TimeInterval = 5 * 60
     static let snoozeInterval: TimeInterval = 30 * 60
 
     private let logger: Logger
@@ -61,8 +59,8 @@ final class AlertCoordinator {
         if let snoozedUntil, timestamp < snoozedUntil { return }
 
         let firstAlert = armed
-        guard firstAlert || level <= Self.severeLevel else { return }
-        let interval = firstAlert ? minimumInterval : Self.repeatInterval
+        guard firstAlert || level <= settings.severeLevel else { return }
+        let interval = firstAlert ? minimumInterval : TimeInterval(settings.repeatMinutes * 60)
         if let lastFiredAt, timestamp.timeIntervalSince(lastFiredAt) < interval { return }
 
         armed = false
