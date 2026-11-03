@@ -14,6 +14,7 @@ final class Alerter: ObservableObject {
     private let logger: Logger
     private let synthesizer = AVSpeechSynthesizer()
     private let notificationPresenter = NotificationPresenter()
+    private let fullscreenPresenter = FullscreenAlertPresenter()
     private var activeSounds: [NSSound] = []
     private var authorizationRequested = false
 
@@ -78,7 +79,12 @@ final class Alerter: ObservableObject {
         }
 
         if settings.notify {
-            postNotification(level: level, threshold: threshold, silent: settings.playSound)
+            postNotification(level: level, threshold: threshold, silent: settings.playSound,
+                             timeSensitive: settings.fullscreenAlert)
+        }
+
+        if settings.fullscreenAlert {
+            fullscreenPresenter.show(level: level, threshold: threshold)
         }
     }
 
@@ -131,7 +137,7 @@ final class Alerter: ObservableObject {
 
     // MARK: - 系统通知
 
-    private func postNotification(level: Int, threshold: Int, silent: Bool) {
+    private func postNotification(level: Int, threshold: Int, silent: Bool, timeSensitive: Bool) {
         guard Bundle.main.bundleIdentifier != nil else {
             logger.error("没有 bundle id，跳过系统通知")
             return
@@ -141,7 +147,7 @@ final class Alerter: ObservableObject {
         content.title = "电量低于 \(threshold)%"
         content.body = "当前电量 \(level)%，请尽快连接电源充电。"
         content.sound = silent ? nil : .default
-        content.interruptionLevel = .active
+        content.interruptionLevel = timeSensitive ? .timeSensitive : .active
 
         let identifier = "low-battery-\(Int(Date().timeIntervalSince1970))"
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)

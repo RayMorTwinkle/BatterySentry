@@ -112,6 +112,11 @@ struct MenuContentView: View {
             Toggle("播放提示音", isOn: $settings.playSound)
             Toggle("语音播报（“电量低于 \(settings.threshold)%”）", isOn: $settings.speak)
             Toggle("系统通知", isOn: $settings.notify)
+            Toggle("全屏强提醒浮窗", isOn: $settings.fullscreenAlert)
+            Text("提醒时在全屏空间显示浮窗，25 秒后自动消失；不主动切出游戏。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if settings.notify, alerter.authorizationStatus == .denied {
                 HStack(spacing: 4) {

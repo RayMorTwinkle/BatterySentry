@@ -15,6 +15,7 @@ final class AppSettings: ObservableObject {
         static let playSound = "playSound"
         static let speak = "speakWarning"
         static let notify = "systemNotification"
+        static let fullscreenAlert = "fullscreenAlert"
     }
 
     private let defaults: UserDefaults
@@ -24,6 +25,7 @@ final class AppSettings: ObservableObject {
     @Published var playSound: Bool { didSet { defaults.set(playSound, forKey: Key.playSound) } }
     @Published var speak: Bool { didSet { defaults.set(speak, forKey: Key.speak) } }
     @Published var notify: Bool { didSet { defaults.set(notify, forKey: Key.notify) } }
+    @Published var fullscreenAlert: Bool { didSet { defaults.set(fullscreenAlert, forKey: Key.fullscreenAlert) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -33,6 +35,7 @@ final class AppSettings: ObservableObject {
             Key.playSound: true,
             Key.speak: true,
             Key.notify: true,
+            Key.fullscreenAlert: true,
         ])
 
         enabled = defaults.bool(forKey: Key.enabled)
@@ -43,6 +46,7 @@ final class AppSettings: ObservableObject {
         playSound = defaults.bool(forKey: Key.playSound)
         speak = defaults.bool(forKey: Key.speak)
         notify = defaults.bool(forKey: Key.notify)
+        fullscreenAlert = defaults.bool(forKey: Key.fullscreenAlert)
     }
 
     /// 重新提醒的阈值（例如阈值 20% -> 23%）
