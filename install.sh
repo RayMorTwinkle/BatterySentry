@@ -21,7 +21,7 @@ echo "==> 安装到 $DEST"
 rm -rf "$DEST"
 cp -R "dist/${APP_NAME}.app" "$DEST"
 xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
-codesign --force --deep --sign - "$DEST" >/dev/null 2>&1 || true
+codesign --verify "$DEST"
 
 echo "==> 启动"
 open "$DEST"

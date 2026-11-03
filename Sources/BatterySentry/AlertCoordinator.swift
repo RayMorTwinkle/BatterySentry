@@ -1,46 +1,74 @@
 import Foundation
 import os.log
 
-/// 判断"该不该响"：一次低电量只提醒一次，充电或电量回升后重新武装。
+/// 一次放电周期先提醒一次；严重低电量时每五分钟再次提醒，直到用户确认或接电。
 @MainActor
 final class AlertCoordinator {
+    static let severeLevel = 10
+    static let repeatInterval: TimeInterval = 5 * 60
+    static let snoozeInterval: TimeInterval = 30 * 60
+
     private let logger: Logger
+    private let now: () -> Date
+    private let deliver: (Int, Int, AppSettings) -> Void
     private var armed = true
     private var lastFiredAt: Date?
-    /// 两次提醒之间的最小间隔，避免阈值反复抖动
+    private var acknowledged = false
+    private(set) var snoozedUntil: Date?
     private let minimumInterval: TimeInterval = 90
 
-    init(subsystem: String) {
+    init(
+        subsystem: String,
+        now: @escaping () -> Date = Date.init,
+        deliver: ((Int, Int, AppSettings) -> Void)? = nil
+    ) {
         logger = Logger(subsystem: subsystem, category: "AlertCoordinator")
+        self.now = now
+        self.deliver = deliver ?? { level, threshold, settings in
+            Alerter.shared.fire(level: level, threshold: threshold, settings: settings)
+        }
     }
 
     func reset() {
         armed = true
-        logger.debug("提醒已重新武装")
+        acknowledged = false
+        snoozedUntil = nil
+        logger.notice("提醒周期已重置")
     }
 
-    func evaluate(level: Int, isCharging: Bool, settings: AppSettings) {
+    func acknowledge() {
+        acknowledged = true
+        snoozedUntil = nil
+        logger.notice("用户已确认本轮低电量提醒")
+    }
+
+    func snooze() {
+        let until = now().addingTimeInterval(Self.snoozeInterval)
+        snoozedUntil = until
+        logger.notice("用户暂停提醒至 \(until.formatted(.iso8601), privacy: .public)")
+    }
+
+    func evaluate(level: Int, hasExternalPower: Bool, settings: AppSettings) {
         guard settings.enabled else { return }
 
-        let threshold = settings.threshold
-        let rearmLevel = settings.rearmLevel
-
-        // 充电中，或电量已经回到阈值以上 -> 重新武装
-        if isCharging || level >= rearmLevel {
-            armed = true
+        if hasExternalPower || level >= settings.rearmLevel {
+            if !armed || acknowledged || snoozedUntil != nil { reset() }
             return
         }
 
-        guard armed, level <= threshold else { return }
+        guard level <= settings.threshold, !acknowledged else { return }
+        let timestamp = now()
+        if let snoozedUntil, timestamp < snoozedUntil { return }
 
-        if let lastFiredAt, Date().timeIntervalSince(lastFiredAt) < minimumInterval {
-            logger.debug("距上次提醒不足 \(Int(self.minimumInterval)) 秒，跳过")
-            return
-        }
+        let firstAlert = armed
+        guard firstAlert || level <= Self.severeLevel else { return }
+        let interval = firstAlert ? minimumInterval : Self.repeatInterval
+        if let lastFiredAt, timestamp.timeIntervalSince(lastFiredAt) < interval { return }
 
         armed = false
-        lastFiredAt = Date()
-        logger.notice("触发低电量提醒：\(level)% <= 阈值 \(threshold)%")
-        Alerter.shared.fire(level: level, threshold: threshold, settings: settings)
+        snoozedUntil = nil
+        lastFiredAt = timestamp
+        logger.notice("触发\(firstAlert ? "首次" : "严重低电量重复", privacy: .public)提醒: \(level)% <= \(settings.threshold)%, 时间 \(timestamp.formatted(.iso8601), privacy: .public)")
+        deliver(level, settings.threshold, settings)
     }
 }

@@ -21,6 +21,8 @@ open /Applications/BatterySentry.app
 
 ## 一、复制这句话给你的 Agent
 
+下面是最初版本的生成提示词；当前版本的增强功能见第四节。
+
 支持 Codex、Claude Code、Trae、Workbuddy、openclaw、Cursor、Cline……任何能在本机跑命令的 Agent。
 
 ```
@@ -97,6 +99,19 @@ APP="dist/BatterySentry.app/Contents/MacOS/BatterySentry"
    ```
 2. **通知权限**：首次运行会请求，允许后才有横幅；拒绝过就到「系统设置 → 通知 → 电量哨兵」打开。
 3. **开机自启**：建议先 `bash install.sh` 装到 /Applications，再打开面板里的开关。
+4. **游戏专注模式**：在「系统设置 → 专注模式 → 游戏」允许电量哨兵，并允许时间敏感通知；在「系统设置 → 通知 → 电量哨兵」开启通知、声音和时间敏感通知，提醒样式可选持续显示。其他专注模式需分别设置。
+
+### 时间敏感通知与签名
+
+默认 `bash build.sh` 使用 ad-hoc 签名。实测在本机 macOS 15.3.1 上，给 ad-hoc 签名直接加入时间敏感 entitlement 后，应用启动时会被系统终止（退出码 137）。因此默认构建保留可运行的普通系统通知、提示音、语音和全屏浮窗。不能把签名中出现 entitlement 当作系统已接受的证据。
+
+拥有已配置 Time Sensitive Notifications 能力的开发者签名身份时，可运行 `BATTERYSENTRY_SIGNING_IDENTITY="证书名称" bash build.sh`。脚本会核验签名中的 entitlement，并运行自检确认进程实际获得该能力。发送时还会读取 `timeSensitiveSetting`：系统允许时使用 Time Sensitive，否则回退为 Active。`--selftest` 会打印签名能力和系统授权状态。
+
+面板中的「30 秒后测试」适合在点击后立即进入游戏。再次打开面板可见实际触发时间；也可查看带时间戳和前台应用标识的日志：
+
+```bash
+/usr/bin/log show --last 30m --style compact --predicate 'subsystem == "com.ray.batterysentry"'
+```
 
 ---
 
@@ -104,12 +119,12 @@ APP="dist/BatterySentry.app/Contents/MacOS/BatterySentry"
 
 | 功能 | 说明 |
 | --- | --- |
-| 低电量提醒 | 电量 ≤ 阈值（默认 20%，可调 5–60%）时触发一次 |
+| 低电量提醒 | 电量 ≤ 阈值时触发；≤ 10% 时每 5 分钟重复，可确认本轮或暂停 30 分钟 |
 | 提示音 | 系统音 `Sosumi` 连响两次（可关） |
 | 语音播报 | zh-CN TTS 念出阈值和当前电量 |
-| 系统通知 | 原生横幅，前台也显示；开启全屏强提醒时使用时间敏感级别 |
+| 系统通知 | 已签名且系统允许时使用 Time Sensitive；否则回退 Active |
 | 全屏强提醒浮窗 | 默认开启；在每块屏幕的全屏空间显示 25 秒，不主动切换游戏焦点 |
-| 防刷屏 | 阈值+3% 回差 + 90 秒最小间隔 |
+| 防刷屏 | 阈值+3% 回差、首次提醒最小间隔 90 秒、严重低电量重复间隔 5 分钟 |
 | 菜单栏图标 | 手绘电池：比例填充 / 充电闪电 / 低电量变红 / 明暗自适应 |
 | 开机自启 | SMAppService，失败退回 LaunchAgent |
 

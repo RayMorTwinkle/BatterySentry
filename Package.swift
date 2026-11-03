@@ -11,6 +11,7 @@ let package = Package(
         .executableTarget(
             name: "BatterySentry",
             path: "Sources/BatterySentry"
-        )
+        ),
+        .testTarget(name: "BatterySentryTests", dependencies: ["BatterySentry"])
     ]
 )

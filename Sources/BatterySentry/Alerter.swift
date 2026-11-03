@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import UserNotifications
+import Security
 import os.log
 
 /// 负责真正"发出"提醒：提示音 + 语音播报 + 系统通知
@@ -10,6 +11,11 @@ final class Alerter: ObservableObject {
 
     /// 系统通知授权状态，供设置界面展示
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    @Published private(set) var timeSensitiveSetting: UNNotificationSetting = .notSupported
+    @Published private(set) var hasTimeSensitiveEntitlement = false
+
+    var onAcknowledge: (() -> Void)?
+    var onSnooze: (() -> Void)?
 
     private let logger: Logger
     private let synthesizer = AVSpeechSynthesizer()
@@ -23,6 +29,12 @@ final class Alerter: ObservableObject {
             subsystem: Bundle.main.bundleIdentifier ?? "BatterySentry",
             category: "Alerter"
         )
+        if let task = SecTaskCreateFromSelf(nil),
+           let value = SecTaskCopyValueForEntitlement(
+               task, "com.apple.developer.usernotifications.time-sensitive" as CFString, nil
+           ) {
+            hasTimeSensitiveEntitlement = (value as? Bool) == true
+        }
     }
 
     // MARK: - 通知授权
@@ -39,6 +51,7 @@ final class Alerter: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.authorizationStatus = settings.authorizationStatus
+                self.timeSensitiveSetting = settings.timeSensitiveSetting
 
                 guard settings.authorizationStatus == .notDetermined,
                       !self.authorizationRequested else { return }
@@ -64,8 +77,8 @@ final class Alerter: ObservableObject {
 
     // MARK: - 提醒
 
-    func fire(level: Int, threshold: Int, settings: AppSettings) {
-        logger.notice("发出提醒: 当前 \(level)%，阈值 \(threshold)%")
+    func fire(level: Int, threshold: Int, settings: AppSettings, isTest: Bool = false) {
+        logger.notice("发出提醒: 当前 \(level)%，阈值 \(threshold)%，时间 \(Date().formatted(.iso8601), privacy: .public)")
 
         if settings.playSound {
             playAlertSound()
@@ -79,19 +92,20 @@ final class Alerter: ObservableObject {
         }
 
         if settings.notify {
-            postNotification(level: level, threshold: threshold, silent: settings.playSound,
-                             timeSensitive: settings.fullscreenAlert)
+            postNotification(level: level, threshold: threshold)
         }
 
         if settings.fullscreenAlert {
-            fullscreenPresenter.show(level: level, threshold: threshold)
+            fullscreenPresenter.show(level: level, threshold: threshold, isTest: isTest,
+                                     acknowledge: { [weak self] in self?.onAcknowledge?() },
+                                     snooze: { [weak self] in self?.onSnooze?() })
         }
     }
 
     /// 面板上的"测试提醒"：用模拟电量触发一遍完整流程
     func fireTest(settings: AppSettings) {
         let simulatedLevel = max(1, settings.threshold - 5)
-        fire(level: simulatedLevel, threshold: settings.threshold, settings: settings)
+        fire(level: simulatedLevel, threshold: settings.threshold, settings: settings, isTest: true)
     }
 
     // MARK: - 提示音
@@ -137,24 +151,35 @@ final class Alerter: ObservableObject {
 
     // MARK: - 系统通知
 
-    private func postNotification(level: Int, threshold: Int, silent: Bool, timeSensitive: Bool) {
+    private func postNotification(level: Int, threshold: Int) {
         guard Bundle.main.bundleIdentifier != nil else {
             logger.error("没有 bundle id，跳过系统通知")
             return
         }
 
-        let content = UNMutableNotificationContent()
-        content.title = "电量低于 \(threshold)%"
-        content.body = "当前电量 \(level)%，请尽快连接电源充电。"
-        content.sound = silent ? nil : .default
-        content.interruptionLevel = timeSensitive ? .timeSensitive : .active
-
-        let identifier = "low-battery-\(Int(Date().timeIntervalSince1970))"
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
-
-        UNUserNotificationCenter.current().add(request) { [logger] error in
-            if let error {
-                logger.error("通知发送失败: \(error.localizedDescription, privacy: .public)")
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { [weak self] settings in
+            Task { @MainActor in
+                guard let self else { return }
+                self.authorizationStatus = settings.authorizationStatus
+                self.timeSensitiveSetting = settings.timeSensitiveSetting
+                let useTimeSensitive = self.hasTimeSensitiveEntitlement &&
+                    settings.timeSensitiveSetting == .enabled
+                let content = UNMutableNotificationContent()
+                content.title = "电量低于 \(threshold)%"
+                content.body = "当前电量 \(level)%，请尽快连接电源充电。"
+                content.sound = .default
+                content.interruptionLevel = useTimeSensitive ? .timeSensitive : .active
+                let identifier = "low-battery-\(UUID().uuidString)"
+                let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+                self.logger.notice("提交系统通知: \(useTimeSensitive ? "Time Sensitive" : "Active", privacy: .public), 授权 \(settings.authorizationStatus.rawValue), 时间 \(Date().formatted(.iso8601), privacy: .public)")
+                center.add(request) { [logger = self.logger] error in
+                    if let error {
+                        logger.error("通知发送失败: \(error.localizedDescription, privacy: .public)")
+                    } else {
+                        logger.notice("系统已接收通知请求: \(identifier, privacy: .public), 时间 \(Date().formatted(.iso8601), privacy: .public)")
+                    }
+                }
             }
         }
     }

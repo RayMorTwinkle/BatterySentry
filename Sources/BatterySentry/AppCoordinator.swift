@@ -11,8 +11,11 @@ final class AppCoordinator: ObservableObject {
     let launchAtLogin: LaunchAtLogin
     let alerter: Alerter
     let logger: Logger
+    @Published private(set) var reminderStatus = ""
+    @Published private(set) var delayedTestStatus = ""
 
     private let alerts: AlertCoordinator
+    private var delayedTestTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
     init() {
@@ -24,6 +27,8 @@ final class AppCoordinator: ObservableObject {
         launchAtLogin = LaunchAtLogin()
         alerter = Alerter.shared
         alerts = AlertCoordinator(subsystem: bundleID)
+        alerter.onAcknowledge = { [weak self] in self?.acknowledgeReminder() }
+        alerter.onSnooze = { [weak self] in self?.snoozeReminder() }
 
         // 阈值/开关变化后立即重新判断
         settings.$threshold
@@ -58,7 +63,8 @@ final class AppCoordinator: ObservableObject {
             guard let self else { return }
             self.monitor.onChange = { [weak self] level, charging in
                 guard let self else { return }
-                self.alerts.evaluate(level: level, isCharging: charging, settings: self.settings)
+                self.alerts.evaluate(level: level, hasExternalPower: charging || self.monitor.isPluggedIn,
+                                     settings: self.settings)
             }
             self.evaluateNow()
         }
@@ -66,11 +72,45 @@ final class AppCoordinator: ObservableObject {
 
     func evaluateNow() {
         guard let level = monitor.level else { return }
-        alerts.evaluate(level: level, isCharging: monitor.isCharging, settings: settings)
+        alerts.evaluate(level: level, hasExternalPower: monitor.isCharging || monitor.isPluggedIn,
+                        settings: settings)
     }
 
     func testAlert() {
         alerter.fireTest(settings: settings)
+    }
+
+    func scheduleDelayedTest() {
+        delayedTestTimer?.invalidate()
+        let scheduledAt = Date()
+        let dueAt = scheduledAt.addingTimeInterval(30)
+        let foreground = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "未知"
+        delayedTestStatus = "已安排：\(dueAt.formatted(date: .omitted, time: .standard))"
+        logger.notice("延迟测试已安排: \(scheduledAt.formatted(.iso8601), privacy: .public), 预计 \(dueAt.formatted(.iso8601), privacy: .public), 前台 \(foreground, privacy: .public)")
+
+        let timer = Timer(timeInterval: 30, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                let actual = Date()
+                let foreground = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "未知"
+                self.delayedTestStatus = "已触发：\(actual.formatted(date: .omitted, time: .standard))（延迟 \(Int(actual.timeIntervalSince(dueAt))) 秒）"
+                self.logger.notice("延迟测试已触发: \(actual.formatted(.iso8601), privacy: .public), 相对预定延迟 \(actual.timeIntervalSince(dueAt)) 秒, 前台 \(foreground, privacy: .public)")
+                self.alerter.fireTest(settings: self.settings)
+                self.delayedTestTimer = nil
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        delayedTestTimer = timer
+    }
+
+    func acknowledgeReminder() {
+        alerts.acknowledge()
+        reminderStatus = "本轮低电量提醒已确认"
+    }
+
+    func snoozeReminder() {
+        alerts.snooze()
+        reminderStatus = "已暂停至 \(alerts.snoozedUntil?.formatted(date: .omitted, time: .standard) ?? "")"
     }
 
     func quit() {

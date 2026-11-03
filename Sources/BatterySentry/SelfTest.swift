@@ -3,6 +3,7 @@ import AVFoundation
 import Darwin
 import Foundation
 import UserNotifications
+import Security
 
 /// 命令行自检：`BatterySentry.app/Contents/MacOS/BatterySentry --selftest [--speak] [--sound]`
 enum SelfTest {
@@ -49,12 +50,16 @@ enum SelfTest {
         }
 
         print("Bundle ID: \(Bundle.main.bundleIdentifier ?? "nil")")
+        let entitlement = SecTaskCreateFromSelf(nil).flatMap {
+            SecTaskCopyValueForEntitlement($0, "com.apple.developer.usernotifications.time-sensitive" as CFString, nil)
+        }
+        print("进程时间敏感能力: \((entitlement as? Bool) == true)")
 
         if Bundle.main.bundleIdentifier != nil {
             let semaphore = DispatchSemaphore(value: 0)
             var statusText = "未知"
             UNUserNotificationCenter.current().getNotificationSettings { settings in
-                statusText = "authorization=\(settings.authorizationStatus.rawValue) alert=\(settings.alertSetting.rawValue) sound=\(settings.soundSetting.rawValue)"
+                statusText = "authorization=\(settings.authorizationStatus.rawValue) alert=\(settings.alertSetting.rawValue) sound=\(settings.soundSetting.rawValue) timeSensitive=\(settings.timeSensitiveSetting.rawValue)"
                 semaphore.signal()
             }
             _ = semaphore.wait(timeout: .now() + 3)

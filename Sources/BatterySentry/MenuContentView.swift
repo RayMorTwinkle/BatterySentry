@@ -92,10 +92,19 @@ struct MenuContentView: View {
                     .frame(width: 38, alignment: .trailing)
             }
 
-            Text("电量 ≤ \(settings.threshold)% 时提醒一次；充电或回升到 \(settings.rearmLevel)% 以上后，才会再次提醒。")
+            Text("电量 ≤ \(settings.threshold)% 时提醒；≤ 10% 时每 5 分钟重复，直到确认、暂停或接电。")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button("暂停 30 分钟") { app.snoozeReminder() }
+                Button("确认本轮") { app.acknowledgeReminder() }
+            }
+            .font(.caption2)
+            .disabled(!isLow)
+            if !app.reminderStatus.isEmpty {
+                Text(app.reminderStatus).font(.caption2).foregroundStyle(.secondary)
+            }
         }
         .opacity(settings.enabled ? 1 : 0.55)
         .animation(.easeInOut(duration: 0.15), value: settings.enabled)
@@ -117,6 +126,15 @@ struct MenuContentView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if settings.notify {
+                if !alerter.hasTimeSensitiveEntitlement {
+                    Text("当前签名没有时间敏感通知能力；系统通知按普通级别发送。")
+                        .font(.caption2).foregroundStyle(.orange)
+                } else if alerter.timeSensitiveSetting != .enabled {
+                    Text("时间敏感通知未获系统允许；请在通知设置中开启。")
+                        .font(.caption2).foregroundStyle(.orange)
+                }
+            }
 
             if settings.notify, alerter.authorizationStatus == .denied {
                 HStack(spacing: 4) {
@@ -160,29 +178,35 @@ struct MenuContentView: View {
     // MARK: - 底部按钮
 
     private var footer: some View {
-        HStack(spacing: 10) {
-            Button {
-                app.testAlert()
-            } label: {
-                Label("测试提醒", systemImage: "bell.badge")
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 10) {
+                Button {
+                    app.testAlert()
+                } label: {
+                    Label("测试提醒", systemImage: "bell.badge")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
 
-            Button("通知设置") {
-                alerter.openNotificationSettings()
-            }
-            .buttonStyle(.link)
-            .font(.caption)
+                Button("30 秒后测试") { app.scheduleDelayedTest() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
 
-            Spacer()
-
-            Button("退出") {
-                app.quit()
+                Spacer()
             }
-            .buttonStyle(.plain)
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            HStack {
+                Button("通知设置") { alerter.openNotificationSettings() }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                Spacer()
+                Button("退出") { app.quit() }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if !app.delayedTestStatus.isEmpty {
+                Text(app.delayedTestStatus).font(.caption2).foregroundStyle(.secondary)
+            }
         }
     }
 
